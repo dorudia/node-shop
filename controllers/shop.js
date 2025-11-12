@@ -1,5 +1,11 @@
 const Product = require("../models/product");
 const Order = require("../models/order");
+const fs = require("fs");
+const path = require("path");
+const PDFDocument = require("pdfkit");
+const stripe = require("stripe")(
+  "sk_test_51SSXjXCQ28pHn5wnxTLIuMSNjCmCrzg4ow0bgtGNPaSVrdopUU1iX1DG556X0aQLLWrDShWnqLzXOtzZjeBBILdU00oftBRLnS"
+);
 
 exports.getProducts = (req, res, next) => {
   Product.find()
@@ -82,7 +88,59 @@ exports.postCartDeleteProduct = (req, res, next) => {
     .catch((err) => console.log(err));
 };
 
-exports.postOrder = (req, res, next) => {
+exports.getCheckout = (req, res, next) => {
+  let products;
+  let total = 0;
+
+  req.user
+    .populate("cart.items.productId")
+    .then((user) => {
+      products = user.cart.items;
+      total = 0;
+      products.forEach((p) => {
+        total += p.quantity * p.productId.price;
+      });
+
+      return stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: products.map((p) => {
+          return {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: p.productId.title,
+                description: p.productId.description,
+              },
+              unit_amount: p.productId.price * 100, // în cenți
+            },
+            quantity: p.quantity,
+          };
+        }),
+        mode: "payment", // important!
+        success_url:
+          req.protocol + "://" + req.get("host") + "/checkout/success",
+        cancel_url: req.protocol + "://" + req.get("host") + "/checkout/cancel",
+      });
+    })
+    .then((session) => {
+      console.log(session);
+
+      res.render("shop/checkout", {
+        path: "/checkout",
+        pageTitle: "Checkout",
+        products: products,
+        totalSum: total,
+        sessionId: session.id,
+      });
+    })
+    .catch((err) => {
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
+    });
+};
+
+exports.getCheckoutSuccess = (req, res, next) => {
   req.user
     .populate("cart.items.productId")
     .then((user) => {
@@ -116,6 +174,145 @@ exports.getOrders = (req, res, next) => {
         pageTitle: "Your Orders",
         orders: orders.reverse(),
       });
+    })
+    .catch((err) => console.log(err));
+};
+
+exports.getInvoice = (req, res, next) => {
+  const orderId = req.params.orderId;
+  Order.findById(orderId)
+    .then((order) => {
+      if (!order) {
+        return next(new Error("No order found"));
+      }
+      if (order.user.userId.toString() !== req.user._id.toString()) {
+        return next(new Error("Unauthorized"));
+      }
+      const invoiceName = "invoice-" + orderId + ".pdf";
+      const invoicePath = path.join("data", "invoices", invoiceName);
+
+      // const pdfDoc = new PDFDocument();
+      // res.setHeader("Content-Type", "application/pdf");
+      // res.setHeader(
+      //   "Content-Disposition",
+      //   'inline; filename="' + invoiceName + '"'
+      // );
+      // pdfDoc.pipe(fs.createWriteStream(invoicePath));
+      // pdfDoc.pipe(res);
+
+      // pdfDoc.fontSize(22).text("Invoice", {
+      //   underline: true,
+      // });
+      // let totalPrice = 0;
+      // order.products.forEach((prod) => {
+      //   totalPrice += prod.quantity * prod.product.price;
+      //   pdfDoc
+      //     .fontSize(14)
+      //     .text(
+      //       prod.product.title +
+      //         " - " +
+      //         prod.quantity +
+      //         " x $" +
+      //         prod.product.price
+      //     );
+      // });
+      // pdfDoc.fontSize(18).text("Total Price: $" + totalPrice);
+      // pdfDoc.end();
+
+      const pdfDoc = new PDFDocument({ margin: 50 });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${invoiceName}"`);
+
+      pdfDoc.pipe(fs.createWriteStream(invoicePath));
+      pdfDoc.pipe(res);
+
+      // === HEADER ===
+      pdfDoc
+        .fontSize(26)
+        .fillColor("#333")
+        .text("Invoice", { align: "center", underline: true });
+      pdfDoc.moveDown();
+
+      pdfDoc
+        .fontSize(14)
+        .fillColor("#555")
+        .text(`Order ID: ${order._id}`)
+        .text(
+          `Date: ${new Date(order.createdAt).toLocaleDateString("ro-RO", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`
+        );
+      pdfDoc.moveDown(2);
+
+      // === TABLE HEADER ===
+      const startX = 60;
+      let y = pdfDoc.y;
+
+      pdfDoc
+        .fontSize(16)
+        .fillColor("#000")
+        .text("Product", startX, y)
+        .text("Qty", startX + 220, y)
+        .text("Price", startX + 300, y)
+        .text("Subtotal", startX + 400, y);
+
+      y += 20;
+
+      // Linie sub antet
+      pdfDoc
+        .moveTo(startX, y)
+        .lineTo(startX + 480, y)
+        .strokeColor("#aaa")
+        .stroke();
+
+      y += 10;
+
+      // === PRODUCTS ===
+      let totalPrice = 0;
+      order.products.forEach((p) => {
+        const subtotal = p.quantity * p.product.price;
+        totalPrice += subtotal;
+
+        pdfDoc
+          .fontSize(14)
+          .fillColor("#333")
+          .text(p.product.title, startX, y)
+          .text(p.quantity.toString(), startX + 220, y)
+          .text(`$${p.product.price.toFixed(2)}`, startX + 300, y)
+          .text(`$${subtotal.toFixed(2)}`, startX + 400, y);
+
+        y += 20;
+      });
+
+      // Linie finală
+      pdfDoc
+        .moveTo(startX, y)
+        .lineTo(startX + 480, y)
+        .strokeColor("#aaa")
+        .stroke();
+
+      y += 30;
+
+      // === TOTAL ===
+      pdfDoc
+        .fontSize(18)
+        .fillColor("#000")
+        .text(`Total: $${totalPrice.toFixed(2)}`, startX + 350, y);
+
+      pdfDoc.end();
+
+      const fileStream = fs.createReadStream(invoicePath);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        'attachment; filename="' + invoiceName + '"'
+      );
+      fileStream.pipe(res);
     })
     .catch((err) => console.log(err));
 };

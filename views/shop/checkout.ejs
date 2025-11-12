@@ -1,0 +1,41 @@
+<%- include('../includes/head.ejs') %>
+<link rel="stylesheet" href="/css/cart.css">
+</head>
+
+<body>
+    <%- include('../includes/navigation.ejs') %>
+    <main>
+        <ul class="cart__item-list">
+            <% products.forEach(p => { %>
+                <li class="cart__item">
+                    <h1><%= p.productId.title %></h1>
+                    <h2>Quantity: <%= p.quantity %></h2>
+                    <h3>Price: $<%= p.productId.price.toFixed(2) %></h3>
+                    <h3>Subtotal: $<%= (p.quantity * p.productId.price).toFixed(2) %></h3>
+                </li>
+            <% }) %>
+        </ul>
+
+        <div class="centered">
+            <h2>Total: $<%= totalSum.toFixed(2) %></h2>
+        </div>
+
+        <div class="centered">
+            <button class="btn" id="checkout-button">Order Now</button>
+        </div>
+
+        <script src="https://js.stripe.com/v3/"></script>
+        <script>
+            const stripe = Stripe("pk_test_51SSXjXCQ28pHn5wnJVbBChpQhQveOHelVWywgYX34VQwLUMdOVHZCK8S2lEuqdqTiHk1GqtbRTWdiOG2nSk99Gh100lRnfeEjl");
+
+            document.getElementById("checkout-button").addEventListener("click", () => {
+                stripe.redirectToCheckout({ sessionId: "<%= sessionId %>" })
+                    .then((result) => {
+                        if (result.error) {
+                            alert(result.error.message);
+                        }
+                    });
+            });
+        </script>
+    </main>
+    <%- include('../includes/end.ejs') %>

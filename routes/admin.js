@@ -24,7 +24,7 @@ router.post(
     .isLength({ min: 3, max: 100 })
     .trim()
     .withMessage("Title must be between 3 and 100 characters long"),
-  check("imageUrl").isURL().trim().withMessage("Please enter a valid URL"),
+  // check("imageUrl").isURL().trim().withMessage("Please enter a valid URL"),
   check("price").isFloat().trim().withMessage("Please enter a valid price"),
   check("description")
     .notEmpty()
@@ -47,7 +47,7 @@ router.post(
     .isLength({ min: 3, max: 100 })
     .trim()
     .withMessage("Title must be between 3 and 100 characters long"),
-  check("imageUrl").isURL().trim().withMessage("Please enter a valid URL"),
+  // check("imageUrl").isURL().trim().withMessage("Please enter a valid URL"),
   check("price").isFloat().trim().withMessage("Please enter a valid price"),
   check("description")
     .notEmpty()

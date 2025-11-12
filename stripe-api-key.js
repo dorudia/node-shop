@@ -1,0 +1,4 @@
+Publishable_key =
+  "pk_test_51SSXjXCQ28pHn5wnJVbBChpQhQveOHelVWywgYX34VQwLUMdOVHZCK8S2lEuqdqTiHk1GqtbRTWdiOG2nSk99Gh100lRnfeEjl";
+Secret_key =
+  "sk_test_51SSXjXCQ28pHn5wnxTLIuMSNjCmCrzg4ow0bgtGNPaSVrdopUU1iX1DG556X0aQLLWrDShWnqLzXOtzZjeBBILdU00oftBRLnS";
