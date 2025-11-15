@@ -1,3 +1,7 @@
+/* :root {
+  --primary-color: #b19d38;
+} */
+
 .form-control {
   margin: 1rem 0;
 }
@@ -28,5 +32,5 @@ form:not([action="/logout"]) {
 
 .form-control input:focus,
 .form-control textarea:focus {
-  outline-color: #00695c;
+  outline-color: var(--primary-color);
 }

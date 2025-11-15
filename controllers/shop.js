@@ -3,9 +3,7 @@ const Order = require("../models/order");
 const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
-const stripe = require("stripe")(
-  "sk_test_51SSXjXCQ28pHn5wnxTLIuMSNjCmCrzg4ow0bgtGNPaSVrdopUU1iX1DG556X0aQLLWrDShWnqLzXOtzZjeBBILdU00oftBRLnS"
-);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY_TEST);
 
 exports.getProducts = (req, res, next) => {
   Product.find()
@@ -55,12 +53,17 @@ exports.getCart = (req, res, next) => {
     .populate("cart.items.productId")
     .then((user) => {
       const products = user.cart.items.filter((p) => p.productId);
+      total = 0;
+      products.forEach((p) => {
+        total += p.quantity * p.productId.price;
+      });
       console.log("😡", JSON.stringify(products, null, 2));
 
       res.render("shop/cart", {
         path: "/cart",
         pageTitle: "Your Cart",
         products: products,
+        totalSum: total,
       });
     })
     .catch((err) => console.log(err));
@@ -190,34 +193,6 @@ exports.getInvoice = (req, res, next) => {
       }
       const invoiceName = "invoice-" + orderId + ".pdf";
       const invoicePath = path.join("data", "invoices", invoiceName);
-
-      // const pdfDoc = new PDFDocument();
-      // res.setHeader("Content-Type", "application/pdf");
-      // res.setHeader(
-      //   "Content-Disposition",
-      //   'inline; filename="' + invoiceName + '"'
-      // );
-      // pdfDoc.pipe(fs.createWriteStream(invoicePath));
-      // pdfDoc.pipe(res);
-
-      // pdfDoc.fontSize(22).text("Invoice", {
-      //   underline: true,
-      // });
-      // let totalPrice = 0;
-      // order.products.forEach((prod) => {
-      //   totalPrice += prod.quantity * prod.product.price;
-      //   pdfDoc
-      //     .fontSize(14)
-      //     .text(
-      //       prod.product.title +
-      //         " - " +
-      //         prod.quantity +
-      //         " x $" +
-      //         prod.product.price
-      //     );
-      // });
-      // pdfDoc.fontSize(18).text("Total Price: $" + totalPrice);
-      // pdfDoc.end();
 
       const pdfDoc = new PDFDocument({ margin: 50 });
 
