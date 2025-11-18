@@ -98,12 +98,21 @@ exports.getCheckout = (req, res, next) => {
   req.user
     .populate("cart.items.productId")
     .then((user) => {
-      products = user.cart.items;
+      // 1. Filtrăm produsele invalide (cele șterse din DB)
+      products = user.cart.items.filter((p) => p.productId);
+
+      // 2. Curățăm cart-ul automat (opțional dar recomandat)
+      user.cart.items = products;
+      return user.save();
+    })
+    .then(() => {
+      // 3. Calculăm totalul
       total = 0;
       products.forEach((p) => {
         total += p.quantity * p.productId.price;
       });
 
+      // 4. Creăm sesiunea Stripe
       return stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         line_items: products.map((p) => {
@@ -114,20 +123,19 @@ exports.getCheckout = (req, res, next) => {
                 name: p.productId.title,
                 description: p.productId.description,
               },
-              unit_amount: p.productId.price * 100, // în cenți
+              unit_amount: p.productId.price * 100, // centi
             },
             quantity: p.quantity,
           };
         }),
-        mode: "payment", // important!
+        mode: "payment",
         success_url:
           req.protocol + "://" + req.get("host") + "/checkout/success",
         cancel_url: req.protocol + "://" + req.get("host") + "/checkout/cancel",
       });
     })
     .then((session) => {
-      console.log(session);
-
+      // 5. Randăm pagina
       res.render("shop/checkout", {
         path: "/checkout",
         pageTitle: "Checkout",

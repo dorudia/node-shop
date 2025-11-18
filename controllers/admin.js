@@ -52,7 +52,7 @@ exports.postAddProduct = (req, res, next) => {
     });
   }
 
-  const imageUrl = image.path;
+  const imageUrl = req.file.path;
 
   const product = new Product({
     title,
@@ -125,59 +125,75 @@ exports.getEditProduct = (req, res, next) => {
     .catch((err) => console.log(err));
 };
 
-exports.postEditProduct = (req, res, next) => {
+const { cloudinary } = require("../util/cloudinary"); // exportă cloudinary.v2 acolo
+
+exports.postEditProduct = async (req, res, next) => {
   const prodId = req.body.productId;
+  const image = req.file;
   const updatedTitle = req.body.title;
   const updatedPrice = req.body.price;
-  const image = req.file;
   const updatedDesc = req.body.description;
 
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    console.log("❌ ➡️", errors.array()[0]);
-    return res.render("admin/edit-product", {
-      pageTitle: "Edit Product",
-      path: "/admin/add-product",
-      editing: false,
-      product: {
-        title: updatedTitle,
-        price: updatedPrice,
-        description: updatedDesc,
-        _id: prodId,
-      },
-      hasError: true,
-      errorMessage: errors.array()[0].msg,
-      addedValues: {
-        title: req.body.title,
-        // imageUrl: req.body.imageUrl,
-        price: req.body.price,
-        description: req.body.description,
-      },
-    });
+  try {
+    const product = await Product.findById(prodId);
+    if (!product) return res.redirect("/");
+
+    if (product.userId.toString() !== req.user._id.toString()) {
+      return res.redirect("/");
+    }
+
+    const oldImageUrl = product.imageUrl;
+    const oldPublicId = oldImageUrl ? extractPublicId(oldImageUrl) : null;
+
+    product.title = updatedTitle;
+    product.price = updatedPrice;
+    product.description = updatedDesc;
+
+    if (image) {
+      // noul URL (multer-storage-cloudinary)
+      const newUrl = image.path;
+      const newPublicId = extractPublicId(newUrl);
+
+      product.imageUrl = newUrl;
+
+      try {
+        await product.save(); // încercăm să salvăm cu noul URL
+      } catch (saveErr) {
+        // save a picat → curățăm imaginea nouă (ca să nu rămână orphan)
+        if (newPublicId) {
+          try {
+            await cloudinary.uploader.destroy(newPublicId);
+          } catch (cleanupErr) {
+            console.error("Cleanup failed for new image:", cleanupErr);
+          }
+        }
+        console.error("Error saving product after image upload:", saveErr);
+        return res.redirect("/500");
+      }
+
+      // dacă ajungem aici, save a reușit -> ștergem imaginea veche
+      if (oldPublicId) {
+        try {
+          await cloudinary.uploader.destroy(oldPublicId);
+        } catch (destroyErr) {
+          console.error(
+            "Failed to delete old image from Cloudinary:",
+            destroyErr
+          );
+          // nu blocăm utilizatorul — logăm doar
+        }
+      }
+
+      return res.redirect("/admin/products");
+    } else {
+      // fără imagine nouă — doar salvăm modificările obișnuite
+      await product.save();
+      return res.redirect("/admin/products");
+    }
+  } catch (err) {
+    console.error("Error in postEditProduct:", err);
+    return res.redirect("/500");
   }
-
-  Product.findById(prodId)
-    .then((product) => {
-      if (product.userId.toString() !== req.user._id.toString()) {
-        return res.redirect("/");
-      }
-      product.title = updatedTitle;
-      product.price = updatedPrice;
-      product.description = updatedDesc;
-      if (image) {
-        fileHelper.deleteFile(product.imageUrl);
-        product.imageUrl = image.path;
-      }
-
-      return product.save().then((result) => {
-        console.log("✅UPDATED PRODUCT!");
-        res.redirect("/admin/products");
-      });
-    })
-    .catch((err) => {
-      console.log("❌Error Updating Product", err);
-      res.redirect("/500");
-    });
 };
 
 exports.getProducts = (req, res, next) => {
@@ -192,26 +208,62 @@ exports.getProducts = (req, res, next) => {
     .catch((err) => console.log(err));
 };
 
-exports.postDeleteProduct = (req, res, next) => {
+exports.postDeleteProduct = async (req, res, next) => {
   const prodId = req.body.productId;
-  Product.findById(prodId)
-    .then((product) => {
-      if (!product) {
-        console.log("Product not found");
-      }
-      fileHelper.deleteFile(product.imageUrl);
-    })
-    .catch((err) => {
-      console.log(err);
+  try {
+    const product = await Product.findById(prodId);
+    if (!product) {
       return res.redirect("/admin/products");
-    });
-  Product.deleteOne({ _id: prodId, userId: req.user._id })
-    .then(() => {
-      console.log("DESTROYED PRODUCT");
-      res.redirect("/admin/products");
-    })
-    .catch((err) => {
-      console.log(err);
-      res.redirect("/500");
-    });
+    }
+
+    const publicId = product.imageUrl
+      ? extractPublicId(product.imageUrl)
+      : null;
+
+    // Ștergem din DB (asigurăm integritatea DB)
+    await Product.deleteOne({ _id: prodId, userId: req.user._id });
+
+    // Apoi încercăm să ștergem imaginea din Cloudinary
+    if (publicId) {
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (err) {
+        console.error(
+          "Failed to delete image from Cloudinary after product deletion:",
+          err
+        );
+        // nu putem face rollback ușor; logăm și, eventual, planificăm retry
+      }
+    }
+
+    console.log("DESTROYED PRODUCT");
+    return res.redirect("/admin/products");
+  } catch (err) {
+    console.error("Error deleting product:", err);
+    return res.redirect("/500");
+  }
 };
+
+// utility function to extract public ID from Cloudinary URL
+function extractPublicId(url) {
+  // Exemple URL:
+  // https://res.cloudinary.com/dvxjznoxa/image/upload/v1763482049/node-shop/asdfg.jpg
+  // public_id -> node-shop/asdfg
+  try {
+    const parts = url.split("/"); // desparte
+    // găsim segmentul după "upload/" și luăm restul până la extensie
+    const uploadIndex = parts.findIndex((p) => p === "upload");
+    if (uploadIndex === -1) return null;
+    const afterUpload = parts.slice(uploadIndex + 1).join("/"); // v1763.../node-shop/asdfg.jpg
+    // scoatem eventualul version prefix (v12345) dacă există
+    const segments = afterUpload.split("/");
+    if (segments[0].startsWith("v") && /^\bv\d+\b/.test(segments[0])) {
+      segments.shift();
+    }
+    const last = segments.join("/"); // node-shop/asdfg.jpg
+    const publicId = last.replace(/\.[^/.]+$/, ""); // scoatem extensia
+    return publicId;
+  } catch (err) {
+    return null;
+  }
+}
