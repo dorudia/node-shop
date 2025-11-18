@@ -100,7 +100,8 @@ const bodyParser = require("body-parser");
 const User = require("./models/user");
 const errorController = require("./controllers/error");
 const session = require("express-session");
-const MongoDBStore = require("connect-mongodb-session")(session);
+// const MongoDBStore = require("connect-mongodb-session")(session);
+const MongoStore = require("connect-mongo");
 const csrf = require("csurf");
 const flash = require("connect-flash");
 const multer = require("multer");
@@ -111,9 +112,14 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 
-const store = new MongoDBStore({
-  uri: process.env.MONGODB_URL,
-  collection: "sessions",
+// const store = new MongoDBStore({
+//   uri: process.env.MONGODB_URL,
+//   collection: "sessions",
+// });
+
+const store = MongoStore.create({
+  mongoUrl: process.env.MONGODB_URL,
+  collectionName: "sessions",
 });
 
 app.set("view engine", "ejs");
