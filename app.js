@@ -11,7 +11,7 @@ const flash = require("connect-flash");
 const multer = require("multer");
 // const dotenv = require("dotenv").config();
 const { storage } = require("./util/cloudinary");
-const PORT = process.env.PORT || 3000;
+// const PORT = process.env.PORT || 3000;
 
 const app = express();
 const store = new MongoDBStore({
@@ -81,9 +81,9 @@ app.use(errorController.get404);
 mongoose
   .connect(process.env.MONGODB_URL)
   .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
+    // app.listen(PORT, () => {
+    //   console.log(`Server is running on port ${PORT}`);
+    // });
   })
   .catch((err) => {
     console.log(err);
