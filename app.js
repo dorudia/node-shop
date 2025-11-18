@@ -78,13 +78,20 @@ app.get("/500", errorController.get500);
 
 app.use(errorController.get404);
 
-mongoose
-  .connect(process.env.MONGODB_URL)
-  .then(() => {
-    // app.listen(PORT, () => {
-    //   console.log(`Server is running on port ${PORT}`);
-    // });
-  })
-  .catch((err) => {
-    console.log(err);
+// Pentru serverless deployment
+let conn = null;
+
+async function connectDB() {
+  if (conn) return conn; // deja conectat
+  conn = await mongoose.connect(process.env.MONGODB_URL);
+  return conn;
+}
+
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 3000;
+  connectDB().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
   });
+}

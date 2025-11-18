@@ -1,3 +1,6 @@
+const { app, connectDB } = require("../app");
 const serverless = require("serverless-http");
-const app = require("../app"); // importă app.js
+
+connectDB().then(() => console.log("MongoDB connected"));
+
 module.exports.handler = serverless(app);
