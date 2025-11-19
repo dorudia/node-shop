@@ -206,7 +206,7 @@ exports.postReset = (req, res, next) => {
                 subject: "Reset Password",
                 html: `
                 <h1>You requested a password reset</h1>
-                <h2>Click this <a href="http://localhost:3000/reset/${token}">link</a> to set a new password.</h2>
+                <h2>Click this <a href="https://node-shop-server-445ec73bbfa9.herokuapp.com/reset/${token}">link</a> to set a new password.</h2>
                 `,
               })
               .catch((err) => console.log("Error sending email", err));
