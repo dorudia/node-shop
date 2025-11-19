@@ -103,6 +103,7 @@ const session = require("express-session");
 // const MongoDBStore = require("connect-mongodb-session")(session);
 const MongoStore = require("connect-mongo");
 const csrf = require("csurf");
+const compression = require("compression");
 const flash = require("connect-flash");
 const multer = require("multer");
 require("dotenv").config(); // deblocat pentru local
@@ -129,6 +130,7 @@ const adminRoutes = require("./routes/admin");
 const shopRoutes = require("./routes/shop");
 const authRoutes = require("./routes/auth");
 
+app.use(compression());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(multer({ storage }).single("image"));
 
